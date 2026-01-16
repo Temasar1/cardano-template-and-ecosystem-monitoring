@@ -19,18 +19,13 @@ import { resolvePlutusScriptAddress } from "@meshsdk/core-cst";
 import validatorsPlutusScript from "../onchain/aiken/plutus.json";
 
 type IConfigOptions = {
+    admin_token: { policy: string; name: string },
     network: 0 | 1,
     wallet: IWallet,
     fetcher: IFetcher,
     submitter: ISubmitter,
     evaluator?: IEvaluator,
 }
-const test_admin_token_policy = "a8d770ae253e4818feb0a5f55dc29d85d86061feee7cc31347276322";
-const test_admin_token_name = stringToHex("aidPod-admin");
-const test_admin_token = {
-    policy: test_admin_token_policy,
-    name: test_admin_token_name
-};
 
 function patient_script(
     admin_token: { policy: string; name: string },
@@ -46,7 +41,7 @@ function patient_script(
     const appliedParams = applyParamsToScript(
         cbor,
         [
-            conStr0([byteString(test_admin_token.policy), byteString(test_admin_token.name)]),
+            conStr0([byteString(admin_token.policy), byteString(admin_token.name)]),
             byteString(hospital_auth_policy),
         ],
         "JSON"
@@ -91,7 +86,7 @@ class Deploy {
         const { policyid, cbor, script_address } = patient_script(
             admin_token,
             hospital_policyid,
-            this.network
+            this.network,
         );
         return { policyid, cbor, script_address };
     };
@@ -101,8 +96,7 @@ class Deploy {
         const { script_address, cbor } = patient_script(
             admin_token,
             hospital_policyid,
-            this.network
-        );
+            this.network        );
         return { script_address, cbor };
     };
 }
@@ -120,7 +114,7 @@ export class medicalCrowdfundingContract {
         const utxos = await this.configOptions.wallet.getUtxos();
 
         const script = new Deploy(this.configOptions.network);
-        const { script_address } = await script.patient_registry(test_admin_token);
+        const { script_address } = await script.patient_registry(this.configOptions.admin_token);
 
         const hospitalTokenName = hospitalName + "HOSPITAL";
         const hospitalTokenNameHex = stringToHex(hospitalTokenName);
@@ -159,7 +153,7 @@ export class medicalCrowdfundingContract {
             submitter: this.configOptions.submitter,
         });
         const script = new Deploy(this.configOptions.network);
-        const { script_address } = await script.patient_registry(test_admin_token);
+        const { script_address } = await script.patient_registry(this.configOptions.admin_token);
 
         const unsignedTx = await txBuilder
             .txOut(script_address, [{ unit: "lovelace", quantity: donationAmount }])
@@ -191,8 +185,8 @@ export class medicalCrowdfundingContract {
         const collateral = (await this.configOptions.wallet.getCollateral())[0];
 
         const script = new Deploy(this.configOptions.network);
-        const { cbor: campaign_cbor } = await script.hospital_claim(test_admin_token);
-        const { hospital_policyid } = await script.hospital_registry(test_admin_token);
+        const { cbor: campaign_cbor } = await script.hospital_claim(this.configOptions.admin_token);
+        const { hospital_policyid } = await script.hospital_registry(this.configOptions.admin_token);
 
         const hospitalTokenName = stringToHex(hospitalName + "HOSPITAL");
         const hospitalAsset = hospital_policyid + hospitalTokenName;
@@ -268,20 +262,20 @@ export class medicalCrowdfundingContract {
 
         const script = new Deploy(this.configOptions.network);
         const { hospital_policyid, cbor } =
-            await script.hospital_registry(test_admin_token);
+            await script.hospital_registry(this.configOptions.admin_token);
         const tokenName = stringToHex(hospitalName + "HOSPITAL");
         const asset = hospital_policyid + tokenName;
         const hospitalNameHex = stringToHex(hospitalName);
         const redeemer = mConStr0([hospitalNameHex]);
         const adminUtxo = utxos.find((utxo) =>
             utxo.output.amount.some(
-                (a) => a.unit === test_admin_token.policy + test_admin_token.name
+                (a) => a.unit === this.configOptions.admin_token.policy + this.configOptions.admin_token.name
             )
         );
 
         if (!adminUtxo) {
             throw new Error(
-                `Admin token not found in wallet. Required: ${test_admin_token.policy}${test_admin_token.name}`
+                `Admin token not found in wallet. Required: ${this.configOptions.admin_token.policy}${this.configOptions.admin_token.name}`
             );
         }
 
@@ -302,8 +296,11 @@ export class medicalCrowdfundingContract {
             .txInCollateral(collateral.input.txHash, collateral.input.outputIndex)
             .selectUtxosFrom(utxos)
             .complete();
+
+        const signedTx = await this.configOptions.wallet.signTx(unsignedTx);
+        const txHash = await this.configOptions.wallet.submitTx(signedTx);
         return {
-            unsignedTx,
+            txHash,
         }
     }
 
@@ -313,7 +310,7 @@ export class medicalCrowdfundingContract {
         const collateral = (await wallet?.getCollateral())[0];
 
         const script = new Deploy(0);
-        const { policyid, cbor } = await script.patient_registry(test_admin_token);
+        const { policyid, cbor } = await script.patient_registry(this.configOptions.admin_token);
 
         const tokenName = stringToHex(patientName + "PATIENT");
         const asset = policyid + tokenName;
@@ -321,13 +318,13 @@ export class medicalCrowdfundingContract {
         const redeemer = mConStr0([patientNameHex]);
         const adminUtxo = utxos.find((utxo) =>
             utxo.output.amount.some(
-                (a) => a.unit === test_admin_token.policy + test_admin_token.name
+                (a) => a.unit === this.configOptions.admin_token.policy + this.configOptions.admin_token.name
             )
         );
 
         if (!adminUtxo) {
             throw new Error(
-                `Admin token not found in wallet. Required: ${test_admin_token.policy}${test_admin_token.name}`
+                `Admin token not found in wallet. Required: ${this.configOptions.admin_token.policy}${this.configOptions.admin_token.name}`
             );
         }
 
@@ -363,7 +360,7 @@ export class medicalCrowdfundingContract {
         const collateral = (await this.configOptions.wallet.getCollateral())[0];
 
         const script = new Deploy(0);
-        const { hospital_policyid, cbor } = await script.hospital_registry(test_admin_token);
+        const { hospital_policyid, cbor } = await script.hospital_registry(this.configOptions.admin_token);
 
         const tokenName = stringToHex(hospitalName + "HOSPITAL");
         const asset = hospital_policyid + tokenName;
@@ -418,7 +415,7 @@ export class medicalCrowdfundingContract {
         const collateral = (await this.configOptions.wallet.getCollateral())[0];
 
         const script = new Deploy(0);
-        const { policyid, cbor } = await script.patient_registry(test_admin_token);
+        const { policyid, cbor } = await script.patient_registry(this.configOptions.admin_token);
 
         const tokenName = stringToHex(patientName + "PATIENT");
         const asset = policyid + tokenName;
