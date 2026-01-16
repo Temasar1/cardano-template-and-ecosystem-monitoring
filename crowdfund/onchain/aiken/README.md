@@ -1,45 +1,65 @@
-# Crowdfunding Aiken Validator
+# aidpod_cf
 
-This is a simple crowdfunding smart contract written in Aiken. It allows a **beneficiary** to raise funds for a specific **goal** up until a **deadline**. Donors can contribute to the campaign, and if the goal is not met by the deadline, they can reclaim their funds.
+Write validators in the `validators` folder, and supporting functions in the `lib` folder using `.ak` as a file extension.
 
----
+```aiken
+validator my_first_validator {
+  spend(_datum: Option<Data>, _redeemer: Data, _output_reference: Data, _context: Data) {
+    True
+  }
+}
+```
 
-## 📜 How It Works
+## Building
 
-The validator is parameterized by three values:
+```sh
+aiken build
+```
 
--   `beneficiary`: The `VerificationKeyHash` of the person or entity who will receive the funds if the campaign is successful.
--   `goal`: An `Int` representing the target amount in Lovelace.
--   `deadline`: An `Int` representing the POSIX timestamp after which the campaign closes.
+## Configuring
 
-The on-chain state is managed via a `datum`, which tracks the wallet hashes of all donors and their corresponding donated amounts.
+**aiken.toml**
+```toml
+[config.default]
+network_id = 41
+```
 
----
+Or, alternatively, write conditional environment modules under `env`.
 
-## 🎬 Actions (Redeemers)
+## Testing
 
-A user can interact with the contract by choosing one of three actions:
+You can write tests in any module using the `test` keyword. For example:
 
-### `DONATE`
+```aiken
+use config
 
-Anyone can send funds to the contract address. This action validates that:
+test foo() {
+  config.network_id + 1 == 42
+}
+```
 
-1.  The amount of Lovelace at the script address increases.
-2.  The on-chain datum is correctly updated to include the new donation amount in the total.
+To run all tests, simply do:
 
-### `WITHDRAW`
+```sh
+aiken check
+```
 
-This action allows the **beneficiary** to collect all the funds from the contract. It's only possible if:
+To run only tests matching the string `foo`, do:
 
-1.  The `deadline` has passed.
-2.  The total contributed amount is greater than or equal to the `goal`.
-3.  The transaction is signed by the `beneficiary`.
+```sh
+aiken check -m foo
+```
 
-### `RECLAIM`
+## Documentation
 
-If the campaign fails to meet its `goal` by the `deadline`, donors can reclaim their funds. This action ensures that:
+If you're writing a library, you might want to generate an HTML documentation for it.
 
-1.  The `deadline` has passed.
-2.  The total contributed amount is less than the `goal`.
-3.  The transaction is signed by the donor(s) who are reclaiming their funds.
-4.  A donor can only reclaim the exact amount they contributed. The on-chain datum is updated to reflect the withdrawal.
+Use:
+
+```sh
+aiken docs
+```
+
+## Resources
+
+Find more on the [Aiken's user manual](https://aiken-lang.org).
